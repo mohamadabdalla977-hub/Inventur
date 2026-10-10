@@ -49,6 +49,7 @@
   #btnImport{background:#e5e7eb; color:#111;}
   #btnReset{background:#fff; color:var(--diff); border:2px solid var(--diff) !important; flex:.6 !important;}
   #leer{text-align:center; color:var(--muted); padding:30px 10px; display:none;}
+  #btnNeu{background:var(--primary); color:#fff;}
   input[type=file]{display:none;}
 </style>
 </head>
@@ -84,6 +85,7 @@
 
 <div class="fuss">
   <button id="btnReset" title="Zurücksetzen">🗑</button>
+  <button id="btnNeu" title="Neuer Artikel hinzufügen">＋ Artikel</button>
   <button id="btnImport">⬆ Import</button>
   <button id="btnExport">⬇ Export Excel</button>
   <input type="file" id="datei" accept=".xlsx,.xls,.csv">
@@ -132,8 +134,8 @@ function render(){
       <td class="nr">${escapeHtml(z.nr)}</td>
       <td><div class="beschr">${escapeHtml(z.beschreibung||"—")}</div>
           <div class="artikel">${escapeHtml(z.artikel||"")}</div></td>
-      <td class="alt">${escapeHtml(z.alt)}</td>
-      <td class="lager">${escapeHtml(z.lager||"—")}</td>
+      <td class="alt">${z.alt===""?"—":escapeHtml(z.alt)}</td>
+      <td class="lager">${(z.lager||"")===""?"—":escapeHtml(z.lager)}</td>
       <td class="neu-cell">
         <div class="neu-wrap">
           <button data-aktion="minus" data-id="${z.nr}" aria-label="weniger">−</button>
@@ -175,7 +177,12 @@ document.getElementById("liste").addEventListener("click", e => {
   let cur = (z.neu === "" || z.neu == null) ? 0 : Number(z.neu);
   if(b.dataset.aktion === "plus") z.neu = cur + 1;
   if(b.dataset.aktion === "minus") z.neu = Math.max(0, cur - 1);
-  if(b.dataset.aktion === "klar"){ z.neu = ""; z.neuLager = ""; }
+  if(b.dataset.aktion === "klar"){
+    if(z.hinzugefuegt){
+      if(!confirm("Diese hinzugefügte Zeile (Nr. " + z.nr + ") wirklich löschen?")) return;
+      daten = daten.filter(x => x !== z);
+    } else { z.neu = ""; z.neuLager = ""; }
+  }
   speichern(); render();
 });
 
@@ -238,6 +245,21 @@ document.getElementById("btnReset").addEventListener("click", () => {
     daten.forEach(z=>{ z.neu=""; z.neuLager=""; });
     speichern(); render();
   }
+});
+
+// ---- Neue Zeile (Artikel nicht in der Stammliste) ----
+function naechsteNr(){
+  let m = 0;
+  daten.forEach(z => { const n = Number(z.nr); if(Number.isFinite(n) && n > m) m = n; });
+  return m + 1;
+}
+document.getElementById("btnNeu").addEventListener("click", () => {
+  const be = prompt("Beschreibung des neuen Artikels:", "");
+  if(be === null) return;
+  const art = prompt("Artikel-Nr. (optional):", "");
+  document.getElementById("search").value = "";
+  daten.push({nr:naechsteNr(), artikel:(art||"").trim(), beschreibung:(be||"").trim(), alt:"", neu:"", lager:"", neuLager:"", hinzugefuegt:true});
+  speichern(); render();
 });
 
 render();

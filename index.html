@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Inventur">
+<title>Inventur – Lagerzählung</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#f2f4f7; --card:#fff; --primary:#0a63c7;
+    --ok:#1a9e54; --diff:#c81e1e; --text:#1a1a1a; --muted:#6b7280;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); font-size:16px;}
+  header{position:sticky; top:0; z-index:10; background:var(--primary); color:#fff; padding:14px 16px 12px;}
+  header h1{margin:0; font-size:21px;}
+  header p{margin:4px 0 0; font-size:13px; opacity:.9;}
+  .progress-wrap{margin-top:10px; background:rgba(255,255,255,.25); border-radius:99px; height:12px; overflow:hidden;}
+  .progress-bar{height:100%; width:0%; background:#fff; border-radius:99px; transition:width .3s;}
+  .progress-text{font-size:13px; margin-top:6px;}
+  .toolbar{position:sticky; top:0; background:var(--bg); padding:10px 12px; border-bottom:1px solid #e2e2e2; z-index:5;}
+  #search{width:100%; font-size:18px; padding:14px; border-radius:12px; border:2px solid #d1d5db; outline:none;}
+  #search:focus{border-color:var(--primary);}
+  .filters{display:flex; gap:8px; margin-top:8px;}
+  .filters button{flex:1; white-space:nowrap; border:2px solid #d1d5db; background:#fff; border-radius:99px; padding:10px 14px; font-size:15px; min-height:44px;}
+  .filters button.active{background:var(--primary); color:#fff; border-color:var(--primary);}
+  .wrap{max-width:1000px; margin:0 auto; padding:10px 12px 140px;}
+  .tabelle-wrap{overflow-x:auto; background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.09);}
+  table{width:100%; min-width:760px; border-collapse:collapse;}
+  thead th{position:sticky; top:0; background:#e8eef6; color:#1f2937; font-size:13px; text-align:left; padding:10px 8px; border-bottom:2px solid #cbd5e1; white-space:nowrap;}
+  tbody td{padding:8px; border-bottom:1px solid #e5e7eb; vertical-align:middle;}
+  tbody tr:nth-child(even){background:#f8fafc;}
+  .nr{font-weight:700; color:var(--primary); white-space:nowrap;}
+  .beschr{font-weight:700; font-size:16px;}
+  .artikel{font-size:12px; color:var(--muted);}
+  .alt{font-size:18px; font-weight:700; text-align:center;}
+  .lager{font-size:16px; text-align:center; font-weight:600;}
+  td input{width:100%; font-size:20px; padding:10px 6px; border-radius:10px; border:2px solid #d1d5db; text-align:center; min-height:50px;}
+  td input:focus{border-color:var(--primary); outline:none;}
+  .neu-cell{min-width:150px;}
+  .neu-wrap{display:flex; gap:4px; align-items:stretch;}
+  .neu-wrap input{flex:1; min-width:60px;}
+  .neu-wrap button{min-width:44px; border-radius:10px; border:2px solid var(--primary); background:#fff; color:var(--primary); font-size:20px; font-weight:700;}
+  .lager-cell{min-width:96px;}
+  .klar-btn{border:none; background:none; color:#9ca3af; font-size:18px; padding:8px;}
+  .hilfe{background:#fff; margin:0 0 10px; padding:12px 14px; border-radius:12px; font-size:14px; color:#374151;}
+  .hilfe summary{font-weight:700; cursor:pointer; font-size:15px;}
+  .fuss{position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #ddd; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); display:flex; gap:8px; z-index:10;}
+  .fuss button{flex:1; min-height:54px; border-radius:12px; font-size:16px; font-weight:700; border:none;}
+  #btnExport{background:var(--ok); color:#fff;}
+  #btnImport{background:#e5e7eb; color:#111;}
+  #btnReset{background:#fff; color:var(--diff); border:2px solid var(--diff) !important; flex:.6 !important;}
+  #leer{text-align:center; color:var(--muted); padding:30px 10px; display:none;}
+  input[type=file]{display:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 Inventur – Lagerzählung</h1>
+  <p>Alt-Bestand sehen • Neu-Bestand eingeben • Lagerort ändern</p>
+  <div class="progress-wrap"><div class="progress-bar" id="balken"></div></div>
+  <div class="progress-text" id="fortschritt">0 von 0 erfasst</div>
+</header>
+
+<div class="toolbar">
+  <input id="search" type="search" placeholder="🔍 Suche: Nr. / Artikel / Beschreibung / Lagerort …" autocomplete="off">
+  <div class="filters">
+    <button data-f="alle" class="active">Alle</button>
+    <button data-f="offen">Offen</button>
+    <button data-f="fertig">Erfasst</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="hilfe">
+    <details>
+      <summary>ℹ️ Anleitung für iPad (antippen)</summary>
+      <ol style="padding-inline-start:20px; margin:8px 0 0;">
+        <li>Oben suchen (z. B. <b>A5</b> für Lagerort, <b>Flansch</b> für Beschreibung).</li>
+        <li>Pro Zeile <b>Anzahl Neu</b> zählen und eintragen, ggf. <b>Neuer Lagerort</b> ändern.</li>
+        <li>Wird automatisch auf dem iPad gespeichert – auch bei geschlossenem Safari.</li>
+        <li>Am Ende unten <b>⬇ Export</b> tippen → Excel-Datei wird erstellt.</li>
+        <li>Zum Arbeiten ohne Internet: In Safari auf <b>Teilen → Zum Home-Bildschirm</b> tippen.</li>
+      </ol>
+    </details>
+  </div>
+
+  <div class="tabelle-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Nr.</th>
+          <th>Beschreibung</th>
+          <th style="text-align:center">Anzahl Alt</th>
+          <th style="text-align:center">Lagerort</th>
+          <th style="text-align:center">Anzahl Neu</th>
+          <th style="text-align:center">Neuer Lagerort</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="liste"></tbody>
+    </table>
+    <div id="leer">Keine Artikel gefunden.<br>Bitte Suche ändern.</div>
+  </div>
+</div>
+
+<div class="fuss">
+  <button id="btnReset" title="Zurücksetzen">🗑</button>
+  <button id="btnImport">⬆ Import</button>
+  <button id="btnExport">⬇ Export Excel</button>
+  <input type="file" id="datei" accept=".xlsx,.xls,.csv">
+</div>
+
+<script>
+// ---- Startdaten aus Mappe1.xlsx (Stand 10.10.2026) ----
+const STARTDATEN = [
+  {nr:1,  artikel:"", beschreibung:"Muffe-DN10",    alt:5, neu:"", lager:"A1", neuLager:""},
+  {nr:2,  artikel:"", beschreibung:"Nippel DN50",   alt:3, neu:"", lager:"A5", neuLager:""},
+  {nr:3,  artikel:"", beschreibung:"Flansch DN50",  alt:2, neu:"", lager:"C2", neuLager:""},
+  {nr:4,  artikel:"", beschreibung:"Flansch DN100", alt:6, neu:"", lager:"D3", neuLager:""},
+  {nr:5,  artikel:"", beschreibung:"Schraube M16",  alt:4, neu:"", lager:"D1", neuLager:""},
+  {nr:6,  artikel:"", beschreibung:"Mutter M16",    alt:9, neu:"", lager:"C5", neuLager:""},
+  {nr:7,  artikel:"", beschreibung:"Nippel DN25",   alt:1, neu:"", lager:"A5", neuLager:""},
+  {nr:8,  artikel:"", beschreibung:"Flansch DN80",  alt:5, neu:"", lager:"A3", neuLager:""},
+  {nr:9,  artikel:"", beschreibung:"Muffe-DN10",    alt:0, neu:"", lager:"A8", neuLager:""},
+  {nr:11, artikel:"", beschreibung:"Flansch DN120", alt:8, neu:"", lager:"A5", neuLager:""},
+  {nr:12, artikel:"", beschreibung:"Nippel DN65",   alt:2, neu:"", lager:"A4", neuLager:""}
+];
+
+const KEY = "inventur_lager_2026_v1";
+let daten = [];
+let filter = "alle";
+
+// Laden (gespeicherter Stand oder Startdaten)
+try {
+  const g = localStorage.getItem(KEY);
+  daten = g ? JSON.parse(g) : JSON.parse(JSON.stringify(STARTDATEN));
+} catch(e){ daten = JSON.parse(JSON.stringify(STARTDATEN)); }
+
+function speichern(){ localStorage.setItem(KEY, JSON.stringify(daten)); }
+
+function istErfasst(z){
+  return !(z.neu === "" || z.neu === null || z.neu === undefined);
+}
+
+function passtFilter(z, q){
+  if(filter === "offen" && istErfasst(z)) return false;
+  if(filter === "fertig" && !istErfasst(z)) return false;
+  if(!q) return true;
+  q = q.toLowerCase();
+  const hay = [z.nr, z.artikel, z.beschreibung, z.lager, z.neuLager, z.alt, z.neu]
+    .map(v => (v===null||v===undefined) ? "" : String(v).toLowerCase()).join(" | ");
+  return q.split(/\s+/).every(w => hay.includes(w));
+}
+
+function render(){
+  const q = document.getElementById("search").value.trim();
+  const tb = document.getElementById("liste");
+  tb.innerHTML = "";
+  const gef = daten.filter(z => passtFilter(z, q));
+
+  document.getElementById("leer").style.display = gef.length ? "none" : "block";
+
+  gef.forEach(z => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="nr">${escapeHtml(z.nr)}</td>
+      <td><div class="beschr">${escapeHtml(z.beschreibung||"—")}</div>
+          <div class="artikel">${escapeHtml(z.artikel||"")}</div></td>
+      <td class="alt">${escapeHtml(z.alt)}</td>
+      <td class="lager">${escapeHtml(z.lager||"—")}</td>
+      <td class="neu-cell">
+        <div class="neu-wrap">
+          <button data-aktion="minus" data-id="${z.nr}" aria-label="weniger">−</button>
+          <input type="number" inputmode="numeric" min="0" placeholder="—" value="${z.neu===""?"":z.neu}" data-id="${z.nr}" data-typ="neu">
+          <button data-aktion="plus" data-id="${z.nr}" aria-label="mehr">+</button>
+        </div>
+      </td>
+      <td class="lager-cell">
+        <input type="text" placeholder="${escapeHtml(z.lager||"")}" value="${escapeHtml(z.neuLager||"")}" data-id="${z.nr}" data-typ="lager" autocapitalize="characters">
+      </td>
+      <td><button class="klar-btn" data-aktion="klar" data-id="${z.nr}" title="Zeile leeren">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+
+  // Fortschritt
+  const ges = daten.length;
+  const fertig = daten.filter(istErfasst).length;
+  const pct = ges ? Math.round(fertig/ges*100) : 0;
+  document.getElementById("balken").style.width = pct + "%";
+  document.getElementById("fortschritt").textContent = `${fertig} von ${ges} erfasst (${pct} %)`;
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// Eingaben (delegiert, mit Auto-Save)
+document.getElementById("liste").addEventListener("input", e => {
+  const el = e.target;
+  if(!el.dataset || !el.dataset.id) return;
+  const z = daten.find(x => String(x.nr) === String(el.dataset.id));
+  if(!z) return;
+  if(el.dataset.typ === "neu"){
+    z.neu = el.value === "" ? "" : Number(el.value);
+  } else {
+    z.neuLager = el.value;
+  }
+  speichern();
+  clearTimeout(window.__t);
+  window.__t = setTimeout(render, 800);
+});
+
+document.getElementById("liste").addEventListener("click", e => {
+  const b = e.target.closest("button[data-aktion]");
+  if(!b) return;
+  const z = daten.find(x => String(x.nr) === String(b.dataset.id));
+  if(!z) return;
+  let cur = (z.neu === "" || z.neu == null) ? 0 : Number(z.neu);
+  if(b.dataset.aktion === "plus") z.neu = cur + 1;
+  if(b.dataset.aktion === "minus") z.neu = Math.max(0, cur - 1);
+  if(b.dataset.aktion === "klar"){ z.neu = ""; z.neuLager = ""; }
+  speichern(); render();
+});
+
+document.getElementById("search").addEventListener("input", render);
+document.querySelectorAll(".filters button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".filters button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); filter = b.dataset.f; render();
+}));
+
+// ---- Export ----
+document.getElementById("btnExport").addEventListener("click", () => {
+  const kopf = ["Nr.","Artilelnr.","Beschreibeung","Anzahl Alt","Anzahl Neu","Lagerort","Neu Lagerort"];
+  const zeilen = daten.map(z => [z.nr, z.artikel||"", z.beschreibung||"", z.alt, z.neu===""?"":z.neu, z.lager||"", z.neuLager||""]);
+  const datum = new Date().toISOString().slice(0,10);
+  try{
+    if(typeof XLSX !== "undefined"){
+      const ws = XLSX.utils.aoa_to_sheet([kopf, ...zeilen]);
+      ws["!cols"] = [{wch:6},{wch:12},{wch:20},{wch:11},{wch:11},{wch:10},{wch:13}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Inventur");
+      XLSX.writeFile(wb, `Inventur_${datum}.xlsx`);
+    } else { throw new Error("no lib"); }
+  } catch(err){
+    // Offline-Fallback: CSV (lässt sich in Excel auf dem iPad öffnen)
+    const csv = [kopf, ...zeilen].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
+    const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `Inventur_${datum}.csv`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  }
+});
+
+// ---- Import ----
+document.getElementById("btnImport").addEventListener("click", ()=>document.getElementById("datei").click());
+document.getElementById("datei").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try{
+      const wb = XLSX.read(ev.target.result, {type:"array"});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+      const norm = s => String(s||"").toLowerCase();
+      const head = rows[0].map(norm);
+      const iNr=head.findIndex(h=>h.includes("nr")&&!h.includes("art")), iArt=head.findIndex(h=>h.includes("art")),
+            iBe=head.findIndex(h=>h.includes("besch")), iAlt=head.findIndex(h=>h.includes("alt")),
+            iNeu=head.findIndex(h=>h.includes("neu")&&!h.includes("lager")), iLa=head.findIndex(h=>h==="lagerort"||(h.includes("lager")&&!h.includes("neu"))),
+            iNLa=head.findIndex(h=>h.includes("neu")&&h.includes("lager"));
+      daten = rows.slice(1).filter(r=>r[iBe]||r[iNr]).map(r=>({
+        nr: r[iNr]??"", artikel: r[iArt]??"", beschreibung: r[iBe]??"",
+        alt: Number(r[iAlt]??0), neu: (r[iNeu]==null||r[iNeu]==="")?"":Number(r[iNeu]),
+        lager: r[iLa]??"", neuLager: r[iNLa]??""
+      }));
+      speichern(); render();
+      alert(`Import erfolgreich: ${daten.length} Artikel geladen.`);
+    }catch(err){ alert("Import fehlgeschlagen. Bitte gültige Excel-Datei wählen."); }
+  };
+  r.readAsArrayBuffer(f); e.target.value="";
+});
+
+// ---- Reset ----
+document.getElementById("btnReset").addEventListener("click", () => {
+  if(confirm("Wirklich alle eingetragenen Mengen löschen und von vorne beginnen?")){
+    daten.forEach(z=>{ z.neu=""; z.neuLager=""; });
+    speichern(); render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>

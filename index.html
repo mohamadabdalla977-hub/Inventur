@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Inventur">
-<title>Inventur – Lagerzählung</title>
+<title>IGAtec Inventur 2026</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -18,15 +18,11 @@
   header{position:sticky; top:0; z-index:10; background:var(--primary); color:#fff; padding:14px 16px 12px;}
   header h1{margin:0; font-size:21px;}
   header p{margin:4px 0 0; font-size:13px; opacity:.9;}
-  .progress-wrap{margin-top:10px; background:rgba(255,255,255,.25); border-radius:99px; height:12px; overflow:hidden;}
-  .progress-bar{height:100%; width:0%; background:#fff; border-radius:99px; transition:width .3s;}
-  .progress-text{font-size:13px; margin-top:6px;}
+  /* (Fortschrittsbalken entfernt) */
   .toolbar{position:sticky; top:0; background:var(--bg); padding:10px 12px; border-bottom:1px solid #e2e2e2; z-index:5;}
   #search{width:100%; font-size:18px; padding:14px; border-radius:12px; border:2px solid #d1d5db; outline:none;}
   #search:focus{border-color:var(--primary);}
-  .filters{display:flex; gap:8px; margin-top:8px;}
-  .filters button{flex:1; white-space:nowrap; border:2px solid #d1d5db; background:#fff; border-radius:99px; padding:10px 14px; font-size:15px; min-height:44px;}
-  .filters button.active{background:var(--primary); color:#fff; border-color:var(--primary);}
+  /* (Filter entfernt) */
   .wrap{max-width:1000px; margin:0 auto; padding:10px 12px 140px;}
   .tabelle-wrap{overflow-x:auto; background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.09);}
   table{width:100%; min-width:760px; border-collapse:collapse;}
@@ -46,8 +42,7 @@
   .neu-wrap button{min-width:44px; border-radius:10px; border:2px solid var(--primary); background:#fff; color:var(--primary); font-size:20px; font-weight:700;}
   .lager-cell{min-width:96px;}
   .klar-btn{border:none; background:none; color:#9ca3af; font-size:18px; padding:8px;}
-  .hilfe{background:#fff; margin:0 0 10px; padding:12px 14px; border-radius:12px; font-size:14px; color:#374151;}
-  .hilfe summary{font-weight:700; cursor:pointer; font-size:15px;}
+  /* (Hilfe entfernt) */
   .fuss{position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #ddd; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); display:flex; gap:8px; z-index:10;}
   .fuss button{flex:1; min-height:54px; border-radius:12px; font-size:16px; font-weight:700; border:none;}
   #btnExport{background:var(--ok); color:#fff;}
@@ -60,35 +55,14 @@
 <body>
 
 <header>
-  <h1>📦 Inventur – Lagerzählung</h1>
-  <p>Alt-Bestand sehen • Neu-Bestand eingeben • Lagerort ändern</p>
-  <div class="progress-wrap"><div class="progress-bar" id="balken"></div></div>
-  <div class="progress-text" id="fortschritt">0 von 0 erfasst</div>
+  <h1>IGAtec Inventur 2026</h1>
 </header>
 
 <div class="toolbar">
   <input id="search" type="search" placeholder="🔍 Suche: Nr. / Artikel / Beschreibung / Lagerort …" autocomplete="off">
-  <div class="filters">
-    <button data-f="alle" class="active">Alle</button>
-    <button data-f="offen">Offen</button>
-    <button data-f="fertig">Erfasst</button>
-  </div>
 </div>
 
 <div class="wrap">
-  <div class="hilfe">
-    <details>
-      <summary>ℹ️ Anleitung für iPad (antippen)</summary>
-      <ol style="padding-inline-start:20px; margin:8px 0 0;">
-        <li>Oben suchen (z. B. <b>A5</b> für Lagerort, <b>Flansch</b> für Beschreibung).</li>
-        <li>Pro Zeile <b>Anzahl Neu</b> zählen und eintragen, ggf. <b>Neuer Lagerort</b> ändern.</li>
-        <li>Wird automatisch auf dem iPad gespeichert – auch bei geschlossenem Safari.</li>
-        <li>Am Ende unten <b>⬇ Export</b> tippen → Excel-Datei wird erstellt.</li>
-        <li>Zum Arbeiten ohne Internet: In Safari auf <b>Teilen → Zum Home-Bildschirm</b> tippen.</li>
-      </ol>
-    </details>
-  </div>
-
   <div class="tabelle-wrap">
     <table>
       <thead>
@@ -116,40 +90,20 @@
 </div>
 
 <script>
-// ---- Startdaten aus Mappe1.xlsx (Stand 10.10.2026) ----
-const STARTDATEN = [
-  {nr:1,  artikel:"", beschreibung:"Muffe-DN10",    alt:5, neu:"", lager:"A1", neuLager:""},
-  {nr:2,  artikel:"", beschreibung:"Nippel DN50",   alt:3, neu:"", lager:"A5", neuLager:""},
-  {nr:3,  artikel:"", beschreibung:"Flansch DN50",  alt:2, neu:"", lager:"C2", neuLager:""},
-  {nr:4,  artikel:"", beschreibung:"Flansch DN100", alt:6, neu:"", lager:"D3", neuLager:""},
-  {nr:5,  artikel:"", beschreibung:"Schraube M16",  alt:4, neu:"", lager:"D1", neuLager:""},
-  {nr:6,  artikel:"", beschreibung:"Mutter M16",    alt:9, neu:"", lager:"C5", neuLager:""},
-  {nr:7,  artikel:"", beschreibung:"Nippel DN25",   alt:1, neu:"", lager:"A5", neuLager:""},
-  {nr:8,  artikel:"", beschreibung:"Flansch DN80",  alt:5, neu:"", lager:"A3", neuLager:""},
-  {nr:9,  artikel:"", beschreibung:"Muffe-DN10",    alt:0, neu:"", lager:"A8", neuLager:""},
-  {nr:11, artikel:"", beschreibung:"Flansch DN120", alt:8, neu:"", lager:"A5", neuLager:""},
-  {nr:12, artikel:"", beschreibung:"Nippel DN65",   alt:2, neu:"", lager:"A4", neuLager:""}
-];
-
-const KEY = "inventur_lager_2026_v1";
+// ---- Keine festen Bestandsdaten in der Seite (Datenschutz).
+// Die Daten werden per ⬆ Import aus der Excel-Datei geladen. ----
+const KEY = "igatec_inventur_2026_v1";
 let daten = [];
-let filter = "alle";
 
-// Laden (gespeicherter Stand oder Startdaten)
+// Laden (gespeicherter Stand)
 try {
   const g = localStorage.getItem(KEY);
-  daten = g ? JSON.parse(g) : JSON.parse(JSON.stringify(STARTDATEN));
-} catch(e){ daten = JSON.parse(JSON.stringify(STARTDATEN)); }
+  daten = g ? JSON.parse(g) : [];
+} catch(e){ daten = []; }
 
 function speichern(){ localStorage.setItem(KEY, JSON.stringify(daten)); }
 
-function istErfasst(z){
-  return !(z.neu === "" || z.neu === null || z.neu === undefined);
-}
-
 function passtFilter(z, q){
-  if(filter === "offen" && istErfasst(z)) return false;
-  if(filter === "fertig" && !istErfasst(z)) return false;
   if(!q) return true;
   q = q.toLowerCase();
   const hay = [z.nr, z.artikel, z.beschreibung, z.lager, z.neuLager, z.alt, z.neu]
@@ -163,7 +117,14 @@ function render(){
   tb.innerHTML = "";
   const gef = daten.filter(z => passtFilter(z, q));
 
-  document.getElementById("leer").style.display = gef.length ? "none" : "block";
+  const leer = document.getElementById("leer");
+  if(!daten.length){
+    leer.innerHTML = "Noch keine Daten.<br>Bitte Excel-Datei über <b>⬆ Import</b> unten laden.";
+    leer.style.display = "block";
+  } else {
+    leer.innerHTML = "Keine Artikel gefunden.<br>Bitte Suche ändern.";
+    leer.style.display = gef.length ? "none" : "block";
+  }
 
   gef.forEach(z => {
     const tr = document.createElement("tr");
@@ -186,13 +147,6 @@ function render(){
       <td><button class="klar-btn" data-aktion="klar" data-id="${z.nr}" title="Zeile leeren">✕</button></td>`;
     tb.appendChild(tr);
   });
-
-  // Fortschritt
-  const ges = daten.length;
-  const fertig = daten.filter(istErfasst).length;
-  const pct = ges ? Math.round(fertig/ges*100) : 0;
-  document.getElementById("balken").style.width = pct + "%";
-  document.getElementById("fortschritt").textContent = `${fertig} von ${ges} erfasst (${pct} %)`;
 }
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -226,10 +180,6 @@ document.getElementById("liste").addEventListener("click", e => {
 });
 
 document.getElementById("search").addEventListener("input", render);
-document.querySelectorAll(".filters button").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll(".filters button").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active"); filter = b.dataset.f; render();
-}));
 
 // ---- Export ----
 document.getElementById("btnExport").addEventListener("click", () => {
